@@ -505,14 +505,22 @@ curl -s https://<your-app>.onrender.com/api/health
 ### Manual deployment (any Node host)
 
 ```bash
-npm ci                 # installs devDependencies (needed: Tailwind, TypeScript)
+npm ci --include=dev   # devDependencies are required at build time (see below)
 npm run build
 npm start              # Next.js reads $PORT
 ```
 
-The build requires devDependencies — `tailwindcss`, `@tailwindcss/postcss`,
-`typescript` and `prisma` are all build-time tools. Do not set
-`NPM_CONFIG_PRODUCTION=true`, or the CSS and typecheck steps fail.
+**Do not let the build run without devDependencies.** `tailwindcss`,
+`@tailwindcss/postcss`, `typescript` and `prisma` are all devDependencies but
+are needed to *build*, not to run. npm omits devDependencies whenever
+`NODE_ENV=production`, which turns into a confusing failure partway through the
+build. `npm ci --include=dev` is immune to that, and so is the
+[`render.yaml`](render.yaml) build command.
+
+One more production gotcha, handled in code rather than docs:
+`src/lib/auth/jwt.ts` **throws** when `JWT_SECRET` is missing or shorter than 16
+characters, instead of quietly signing sessions with a development default.
+Set it before the first request reaches a login route.
 
 ---
 

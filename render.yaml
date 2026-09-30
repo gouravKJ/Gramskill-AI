@@ -25,7 +25,11 @@ services:
     region: singapore
     branch: main
     autoDeployTrigger: commit
-    buildCommand: npm ci && npm run build
+    # `--include=dev` is deliberate. Tailwind, TypeScript and Prisma are all
+    # devDependencies but are required AT BUILD TIME, and npm silently omits
+    # devDependencies whenever NODE_ENV=production — a classic deploy failure
+    # that looks like "tailwindcss: not found" halfway through the build.
+    buildCommand: npm ci --include=dev && npm run build
     # Next.js reads $PORT and binds all interfaces, which is what Render needs.
     startCommand: npm start
     # Used by Render to decide when the deploy is live, and to auto-restart on
