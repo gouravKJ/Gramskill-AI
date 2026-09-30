@@ -1,0 +1,26 @@
+# ---------------------------------------------------------------------------
+# GramSkill AI — Python matching service
+#
+# Install with:  pip install -r ml-service/requirements.txt
+#
+# Every optional dependency below has a graceful fallback, so the service still
+# starts if a wheel is unavailable on your machine (e.g. XGBoost on some ARM
+# builds). See README.md -> "Degraded modes".
+# ---------------------------------------------------------------------------
+
+# --- required ---------------------------------------------------------------
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.32,<1.0
+pydantic>=2.7,<3.0
+numpy>=1.26,<3.0
+
+# --- ML ranking (optional) --------------------------------------------------
+# The ranker upgrades the response from "explainable weighted factors" to a
+# learned model. If sklearn is missing we fall back to the heuristic scorer.
+scikit-learn>=1.4,<2.0
+# Optional extra gradient boosting backend (used automatically when present).
+xgboost>=2.0,<4.0
+
+# --- semantic similarity (optional, heavy) ----------------------------------
+# Sentence Transformers pulls in PyTorch (~2 GB). Install it only when you want
+# real embeddings:  pip install -r ml-service/requirements-embeddings.txt

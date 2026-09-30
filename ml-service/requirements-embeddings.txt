@@ -1,0 +1,14 @@
+# ---------------------------------------------------------------------------
+# Optional: neural sentence embeddings for the semantic-similarity factor.
+#
+#   pip install -r ml-service/requirements-embeddings.txt
+#
+# Without this, the service uses a dependency-free TF-IDF cosine similarity over
+# the same profile/job documents. The scores are lower in magnitude but ranked
+# almost identically, which is what the UI actually consumes.
+# ---------------------------------------------------------------------------
+
+-r requirements.txt
+
+sentence-transformers>=3.0,<6.0
+torch>=2.2

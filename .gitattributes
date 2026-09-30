@@ -1,0 +1,24 @@
+# ---------------------------------------------------------------------------
+# Line endings are normalised to LF inside the repository.
+#
+# The app deploys to Linux hosts (Render) and the Python service, Dockerfile and
+# render.yaml are all consumed by Linux tooling, where CRLF causes confusing
+# failures. Committing LF and checking out LF keeps everyone byte-identical;
+# Windows developers are unaffected (git is line-ending agnostic for text).
+# ---------------------------------------------------------------------------
+* text=auto eol=lf
+
+# Binary assets — never converted.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.svg  binary
+*.webp binary
+*.pdf  binary
+*.woff  binary
+*.woff2 binary
+
+# Generated lockfile: keep it stable and out of diffs.
+package-lock.json text eol=lf -diff

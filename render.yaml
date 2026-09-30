@@ -1,0 +1,94 @@
+# ---------------------------------------------------------------------------
+# GramSkill AI — Render blueprint
+#
+# Deploy:  Render Dashboard -> New -> Blueprint -> pick this repository.
+# Render reads this file and creates the services below in one go.
+#
+#   gramskill-ai   Next.js app, public  ← this is the URL you share
+#   gramskill-ml   FastAPI ML service, private, optional
+#
+# The app runs in DEMO MODE by default: an in-memory dataset, no database, no
+# API keys. Everything below except `JWT_SECRET` is therefore optional.
+#
+# `JWT_SECRET` is NOT optional in production — the app throws at startup without
+# a 32+ character value. `generateValue: true` makes Render create one.
+# ---------------------------------------------------------------------------
+
+services:
+  # -------------------------------------------------------------------------
+  # The application. Public, and the only service you need for a demo.
+  # -------------------------------------------------------------------------
+  - type: web
+    name: gramskill-ai
+    runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    autoDeploy: true
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    # Used by Render to decide when the deploy is live, and to auto-restart on
+    # failure. It reports the data source, dataset size and ML/LLM status.
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.14.0
+      # demo = bundled in-memory dataset (no database). Switch to `postgres`
+      # only after adding a database and running `npm run setup` against it.
+      - key: DATA_SOURCE
+        value: demo
+      - key: JWT_SECRET
+        generateValue: true
+      # Render wires the internal host:port of the ML service in below. Note
+      # there is no scheme — the app adds one (see lib/server/ml-service.ts).
+      - key: ML_SERVICE_URL
+        fromService:
+          type: web
+          name: gramskill-ml
+          property: hostport
+
+  # -------------------------------------------------------------------------
+  # Optional python matcher. Delete this block for a leaner, faster deploy —
+  # the app silently falls back to its in-process TypeScript matcher.
+  # -------------------------------------------------------------------------
+  - type: web
+    name: gramskill-ml
+    runtime: python
+    plan: free
+    region: singapore
+    branch: main
+    autoDeploy: true
+    rootDir: ml-service
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.6
+      # Trains the ranker on first boot (~3 s) and caches the artifact.
+      - key: ML_TRAIN_ON_BOOT
+        value: "1"
+      # If the free 512 MB instance runs out of memory loading XGBoost, set
+      # ML_MODEL=heuristic: that path never imports scikit-learn or XGBoost and
+      # returns scores numerically identical to the TypeScript engine.
+      # - key: ML_MODEL
+      #   value: heuristic
+
+# ---------------------------------------------------------------------------
+# Optional: real persistence instead of the bundled dataset.
+#
+#   1. Uncomment this block.
+#   2. On `gramskill-ai`, change DATA_SOURCE to `postgres` and add:
+#        - key: DATABASE_URL
+#          fromDatabase:
+#            name: gramskill-db
+#            property: connectionString
+#   3. Redeploy, then run `npm run setup` once from a local shell pointed at the
+#      same DATABASE_URL to create the schema and seed the demo records.
+# ---------------------------------------------------------------------------
+# databases:
+#   - name: gramskill-db
+#     plan: free
+#     region: singapore
+#     databaseName: gramskill
+#     user: gramskill

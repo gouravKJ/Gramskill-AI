@@ -1,0 +1,457 @@
+// GramSkill AI — PostgreSQL schema (Prisma ORM)
+//
+// The application runs in two modes:
+//   DATA_SOURCE=demo      → in-memory dataset, zero infrastructure (default)
+//   DATA_SOURCE=postgres  → this schema via Prisma
+//
+// `npm run setup` generates the client, pushes this schema and seeds demo data.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/* --------------------------------- Enums ---------------------------------- */
+
+enum Role {
+  SEEKER
+  ADMIN
+}
+
+enum EducationLevel {
+  BELOW_10
+  CLASS_10
+  CLASS_12
+  ITI
+  DIPLOMA
+  GRADUATE
+  POST_GRADUATE
+}
+
+enum ExperienceLevel {
+  FRESHER
+  ZERO_TO_ONE
+  ONE_TO_THREE
+  THREE_PLUS
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  APPRENTICESHIP
+  INTERNSHIP
+  GIG
+}
+
+enum WorkMode {
+  ONSITE
+  REMOTE
+  HYBRID
+  FIELD
+}
+
+enum SkillProficiency {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum SkillImportance {
+  REQUIRED
+  PREFERRED
+  OPTIONAL
+}
+
+enum ApplicationStatus {
+  SAVED
+  APPLIED
+  UNDER_REVIEW
+  INTERVIEW
+  SELECTED
+  REJECTED
+}
+
+enum OpportunitySource {
+  PRIVATE
+  GOVERNMENT
+  APPRENTICESHIP
+  SKILL_DEVELOPMENT
+  SELF_EMPLOYMENT
+  LOCAL
+}
+
+enum TrainingMode {
+  ONLINE
+  OFFLINE
+  HYBRID
+}
+
+enum TrainingStatus {
+  RECOMMENDED
+  ENROLLED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum AgentMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum AgentToolName {
+  searchJobs
+  filterJobs
+  getJobDetails
+  analyzeSkillGap
+  recommendTraining
+  prepareApplication
+  trackApplication
+  getApplicationStatus
+}
+
+enum AgentActionStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  COMPLETED
+  FAILED
+}
+
+enum NotificationKind {
+  JOB
+  APPLICATION
+  TRAINING
+  SYSTEM
+  DEADLINE
+}
+
+enum LanguageCode {
+  en
+  hi
+}
+
+/* --------------------------------- Models --------------------------------- */
+
+model Location {
+  id       String  @id
+  name     String
+  district String
+  state    String
+  lat      Float
+  lng      Float
+  isRural  Boolean @default(true)
+
+  profiles    Profile[] @relation("ProfileHomeLocation")
+  jobs        Job[]
+  trainings   Training[]
+  preferences ProfilePreferredLocation[]
+
+  @@index([state])
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(SEEKER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  profile          Profile?
+  applications     Application[]
+  userSkills       UserSkill[]
+  userTrainings    UserTraining[]
+  skillGaps        SkillGap[]
+  conversations    AgentConversation[]
+  agentActions     AgentAction[]
+  notifications    Notification[]
+
+  @@index([role])
+}
+
+model Profile {
+  id                  String          @id @default(cuid())
+  userId              String          @unique
+  name                String
+  age                 Int?
+  phone               String?
+  language            LanguageCode    @default(en)
+  locationId          String
+  education           EducationLevel?
+  course              String?
+  graduationYear      Int?
+  experience          ExperienceLevel?
+  jobTypes            JobType[]
+  workModes           WorkMode[]
+  industries          String[]
+  salaryExpectation   Int?
+  careerGoal          String          @default("")
+  bio                 String          @default("")
+  resumeText          String          @default("")
+  onboardingCompleted Boolean         @default(false)
+  updatedAt           DateTime        @updatedAt
+
+  user           User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  location       Location                   @relation("ProfileHomeLocation", fields: [locationId], references: [id])
+  preferred      ProfilePreferredLocation[]
+  skillGaps      SkillGap[]
+
+  @@index([locationId])
+}
+
+model ProfilePreferredLocation {
+  profileId  String
+  locationId String
+
+  profile  Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@id([profileId, locationId])
+}
+
+model Skill {
+  id            String   @id
+  name          String   @unique
+  category      String
+  learningWeeks Int      @default(4)
+  aliases       String[]
+
+  userSkills   UserSkill[]
+  jobSkills    JobSkill[]
+  trainings    TrainingSkill[]
+  skillGaps    SkillGap[]
+
+  @@index([category])
+}
+
+model UserSkill {
+  id              String           @id @default(cuid())
+  userId          String
+  skillId         String
+  proficiency     SkillProficiency  @default(BEGINNER)
+  yearsExperience Int              @default(0)
+  createdAt       DateTime         @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skillId])
+}
+
+model Job {
+  id                String            @id @default(cuid())
+  title             String
+  company           String
+  companyType       String
+  sector            String
+  source            OpportunitySource @default(PRIVATE)
+  description       String
+  requirements      String[]
+  responsibilities  String[]
+  locationId        String
+  workMode          WorkMode
+  jobType           JobType
+  salaryMin         Int?
+  salaryMax         Int?
+  experienceRequired ExperienceLevel
+  educationRequired EducationLevel
+  openings          Int               @default(1)
+  postedAt          DateTime          @default(now())
+  deadline          DateTime
+  isRuralFriendly   Boolean           @default(true)
+  localLanguageSupport Boolean        @default(true)
+  contactEmail      String
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  location     Location     @relation(fields: [locationId], references: [id])
+  skills       JobSkill[]
+  applications Application[]
+
+  @@index([locationId])
+  @@index([source])
+  @@index([sector])
+}
+
+model JobSkill {
+  jobId          String
+  skillId        String
+  importance     SkillImportance  @default(REQUIRED)
+  minProficiency SkillProficiency @default(INTERMEDIATE)
+
+  job   Job   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([jobId, skillId])
+}
+
+model Application {
+  id            String            @id @default(cuid())
+  userId        String
+  jobId         String
+  status        ApplicationStatus @default(SAVED)
+  appliedAt     DateTime          @default(now())
+  interviewAt   DateTime?
+  nextAction    String            @default("")
+  nextActionAt  DateTime?
+  coverNote     String            @default("")
+  isDemo        Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  user    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job     Job                @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  events  ApplicationEvent[]
+
+  @@unique([userId, jobId])
+  @@index([userId, status])
+}
+
+model ApplicationEvent {
+  id            String            @id @default(cuid())
+  applicationId String
+  status        ApplicationStatus
+  note          String            @default("")
+  at            DateTime          @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+}
+
+model Training {
+  id            String       @id
+  title         String
+  provider      String
+  description   String
+  durationWeeks Int
+  mode          TrainingMode
+  language      String
+  cost          Int          @default(0)
+  certification String       @default("")
+  rating        Float        @default(4.0)
+  enrolments    Int          @default(0)
+  careerPath    String       @default("")
+  locationId    String?
+
+  location      Location?        @relation(fields: [locationId], references: [id])
+  skills        TrainingSkill[]
+  userTrainings UserTraining[]
+
+  @@index([careerPath])
+}
+
+model TrainingSkill {
+  trainingId String
+  skillId    String
+
+  training Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  skill    Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([trainingId, skillId])
+}
+
+model UserTraining {
+  id         String         @id @default(cuid())
+  userId     String
+  trainingId String
+  status     TrainingStatus @default(RECOMMENDED)
+  progress   Int            @default(0)
+  enrolledAt DateTime       @default(now())
+  completedAt DateTime?
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  training Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, trainingId])
+}
+
+model SkillGap {
+  id            String           @id @default(cuid())
+  userId        String
+  profileId     String?
+  skillId       String
+  targetJobId   String?
+  importance    SkillImportance   @default(REQUIRED)
+  estimatedWeeks Int             @default(4)
+  rationale     String           @default("")
+  detectedAt    DateTime         @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile Profile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  skill   Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skillId])
+  @@index([userId])
+}
+
+model AgentConversation {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String   @default("New conversation")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages AgentMessage[]
+  actions  AgentAction[]
+
+  @@index([userId])
+}
+
+model AgentMessage {
+  id             String           @id @default(cuid())
+  conversationId String
+  role           AgentMessageRole
+  content        String
+  toolCalls      Json?
+  planSteps      String[]
+  jobIds         String[]
+  requiresApproval Boolean        @default(false)
+  createdAt      DateTime         @default(now())
+
+  conversation AgentConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+}
+
+model AgentAction {
+  id             String            @id @default(cuid())
+  conversationId String
+  userId         String
+  tool           AgentToolName
+  input          Json
+  outputSummary  String            @default("")
+  status         AgentActionStatus @default(PENDING_APPROVAL)
+  requiresApproval Boolean         @default(true)
+  createdAt      DateTime          @default(now())
+  resolvedAt     DateTime?
+
+  conversation AgentConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  kind      NotificationKind @default(SYSTEM)
+  href      String?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+}
