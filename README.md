@@ -468,10 +468,12 @@ drift apart unnoticed.
 
 ### Deploy to Render
 
-The repo ships a [`render.yaml`](render.yaml) blueprint, so the deploy is one
-step: **Render Dashboard → New → Blueprint → pick the repository**. Render creates
-both services and fills in every environment variable, including a generated
-`JWT_SECRET`.
+This repository ships a [`render.yaml`](render.yaml) blueprint, so the deploy is
+one step: **Render Dashboard → New → Blueprint → connect
+`github.com/gouravKJ/Gramskill-AI` → Apply**. Render then creates both services
+and fills in every environment variable, including a generated `JWT_SECRET`.
+
+Repository: <https://github.com/gouravKJ/Gramskill-AI>
 
 Two things worth knowing before the first deploy:
 

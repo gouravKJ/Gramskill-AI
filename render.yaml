@@ -24,8 +24,9 @@ services:
     plan: free
     region: singapore
     branch: main
-    autoDeploy: true
+    autoDeployTrigger: commit
     buildCommand: npm ci && npm run build
+    # Next.js reads $PORT and binds all interfaces, which is what Render needs.
     startCommand: npm start
     # Used by Render to decide when the deploy is live, and to auto-restart on
     # failure. It reports the data source, dataset size and ML/LLM status.
@@ -57,7 +58,7 @@ services:
     plan: free
     region: singapore
     branch: main
-    autoDeploy: true
+    autoDeployTrigger: commit
     rootDir: ml-service
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
