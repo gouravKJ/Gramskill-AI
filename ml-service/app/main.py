@@ -20,7 +20,6 @@ then in the Next.js `.env.local`:
 
 from __future__ import annotations
 
-import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Query
@@ -29,7 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import __version__, config
 from .locations import LOCATIONS
 from .log import LOGGER
-from .models import matcher, model_info
+from .models import cached_matcher, matcher, model_info, warm_in_background
 from .models.embeddings import backend_name, embeddings_available
 from .schemas import (
     BatchMatchRequest,
@@ -45,19 +44,21 @@ from .skills import SKILLS
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    """Warm the matcher before the first request.
+    """Open the port first, train second.
 
-    Training on boot costs ~3 s on 12,000 rows; doing it here means the first
-    `/predict` an evaluator triggers is instant instead of mysteriously slow.
-    The chosen matcher and its holdout metrics are logged on startup.
+    uvicorn does not bind its listening socket until this hook returns, so any
+    model work performed here would keep the service port closed for its whole
+    duration. That is fatal on a throttled free instance: fitting the ranker can
+    take far longer than a port scan allows, and Render reports
+    "No open HTTP ports detected on 0.0.0.0, continuing to scan..." in a loop.
+
+    So we hand the expensive work to a background thread and return at once. The
+    socket opens immediately, `/health` answers instantly, and the first real
+    `/predict` normally finds a warm matcher.
     """
-    started = time.perf_counter()
-    current = matcher()
+    warm_in_background()
     LOGGER.info(
-        "ready in %.2fs - matcher=%s (%s), semantic=%s",
-        time.perf_counter() - started,
-        current.kind,
-        current.backend,
+        "listening on 0.0.0.0 - matcher warming in background, semantic=%s",
         backend_name(),
     )
     yield
@@ -85,14 +86,23 @@ app.add_middleware(
 
 @app.get("/", tags=["meta"])
 def root() -> dict[str, object]:
-    """Service card — handy when you open the port in a browser."""
-    current = matcher()
+    """Service card — handy when you open the port in a browser.
+
+    Reports the matcher if it is already built, and otherwise says so instead of
+    blocking on training. This endpoint may be the very first request after a
+    cold deploy.
+    """
+    current = cached_matcher()
     return {
         "service": config.SERVICE_NAME,
         "version": __version__,
         "modelVersion": config.MODEL_VERSION,
         "tagline": "From Skills to Opportunities.",
-        "matcher": current.describe(),
+        "matcher": (
+            current.describe()
+            if current is not None
+            else {"kind": "warming-up", "backend": "matcher is being built"}
+        ),
         "semanticBackend": backend_name(),
         "endpoints": ["/health", "/model", "/predict", "/predict/batch", "/docs"],
     }
@@ -104,17 +114,23 @@ def health() -> HealthResponse:
 
     The Next.js `/api/health` route reports `ML_SERVICE_URL` as merely
     "configured"; this endpoint is what actually proves the service answers.
+
+    Deliberately non-blocking: it reports the matcher if it is already built and
+    `warming-up` otherwise. Waiting on construction here would make the platform
+    health check time out on a cold, slow instance — the same failure that
+    keeping training out of the lifespan hook avoids.
     """
-    current = matcher()
+    current = cached_matcher()
+    model_kind = current.kind if current is not None else "warming-up"
     return HealthResponse(
         status="healthy",
         service=config.SERVICE_NAME,
         modelVersion=config.MODEL_VERSION,
         engine=config.SERVICE_NAME,
-        modelKind=current.kind,
+        modelKind=model_kind,
         semanticBackend=backend_name(),
         capabilities={
-            "learnedRanker": current.kind != "heuristic",
+            "learnedRanker": current is not None and current.kind != "heuristic",
             "scikitLearn": _installed("sklearn"),
             "xgboost": _installed("xgboost"),
             "sentenceTransformers": embeddings_available(),

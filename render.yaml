@@ -30,7 +30,12 @@ services:
     # devDependencies whenever NODE_ENV=production — a classic deploy failure
     # that looks like "tailwindcss: not found" halfway through the build.
     buildCommand: npm ci --include=dev && npm run build
-    # Next.js reads $PORT and binds all interfaces, which is what Render needs.
+    # `-H 0.0.0.0` (baked into `npm start`) is essential, not cosmetic.
+    # Without a hostname `next start` lets Node pick, and Node binds IPv6 `::`.
+    # Render's port scanner only probes IPv4 `0.0.0.0`, so a container without
+    # dual-stack IPv6 answers nothing and Render loops forever with
+    # "No open HTTP ports detected on 0.0.0.0, continuing to scan...".
+    # Next.js still reads the port from $PORT, which Render sets automatically.
     startCommand: npm start
     # Used by Render to decide when the deploy is live, and to auto-restart on
     # failure. It reports the data source, dataset size and ML/LLM status.
@@ -65,12 +70,17 @@ services:
     autoDeployTrigger: commit
     rootDir: ml-service
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    # `--host 0.0.0.0` must match the host Render scans (IPv4). `${PORT:-10000}`
+    # keeps the command valid even if $PORT is somehow unset, instead of
+    # failing with "invalid port" and never opening a socket.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000}
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.6
-      # Trains the ranker on first boot (~3 s) and caches the artifact.
+      # Trains the ranker on first boot and caches the artifact. Training runs
+      # on a background thread, so the port is already open while it happens —
+      # it can never delay the deploy's port check or health check.
       - key: ML_TRAIN_ON_BOOT
         value: "1"
       # If the free 512 MB instance runs out of memory loading XGBoost, set
